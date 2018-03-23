@@ -9,15 +9,15 @@
 
 <body>
   <header>
-    <nav>
+    <nav class="title" aria-label="Title">
       <h1><a href="/">Restaurant Reviews</a></h1>
     </nav>
   </header>
 
-  <main id="maincontent">
-    <section id="map-container">
-      <div id="map"></div>
-    </section>
+  <main>
+    <aside id="map-container">
+      <div id="map" role="application" aria-label="Google Maps"></div>
+    </aside>
     <section>
       <div class="filter-options">
         <h2>Filter Results</h2>
@@ -34,10 +34,10 @@
 
   <script type="application/javascript" charset="utf-8" src="js/dbhelper.js"></script>
   <script type="application/javascript" charset="utf-8" src="js/main.js"></script>
-  <script async defer src="https://maps.googleapis.com/maps/api/js?key=YOUR_GOOGLE_MAPS_API_KEY&libraries=places&callback=initMap"></script>
+  <script async defer src="https://maps.googleapis.com/maps/api/js?key=AIzaSyClZqWH_MXlITjqt40fkyKk4g2Bj2Zc1Nk&libraries=places&callback=initMap"></script>
 
 
-  <footer id="footer">
+  <footer>
     Copyright (c) 2017 <a href="/"><strong>Restaurant Reviews</strong></a> All Rights Reserved.
   </footer>
 
