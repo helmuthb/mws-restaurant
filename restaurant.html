@@ -7,6 +7,7 @@
   <!-- Main CSS file -->
   <link rel="stylesheet" href="css/styles.css" type="text/css">
   <title>Restaurant Info</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
 </head>
 
 <body class="inside">
@@ -67,7 +68,20 @@
   <!-- Google Maps -->
   <script async defer src="https://maps.googleapis.com/maps/api/js?key=AIzaSyClZqWH_MXlITjqt40fkyKk4g2Bj2Zc1Nk&libraries=places&callback=initMap"></script>
   <!-- End scripts -->
-
+  <script>
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('/sw.js').then(function(registration) {
+      // Registration was successful
+      console.log('ServiceWorker registration successful with scope: ', registration.scope);
+    }, function(err) {
+      // registration failed :(
+      console.log('ServiceWorker registration failed: ', err);
+    });
+  }
+  else {
+    console.log('ServiceWorker is not supported');
+  }
+  </script>
 </body>
 
 </html>
