@@ -140,7 +140,7 @@ createRestaurantHTML = (restaurant) => {
 
   const image = document.createElement('img');
   image.className = 'restaurant-img';
-  image.alt = ''; // no need to read image by screen reader
+  image.alt = restaurant.name;
   var fullSrc = DBHelper.imageUrlForRestaurant(restaurant);
   var srcset = DBHelper.imageUrlForRestaurant(restaurant, 200) + " 200w, " +
                DBHelper.imageUrlForRestaurant(restaurant, 400) + " 400w, " +
@@ -149,7 +149,7 @@ createRestaurantHTML = (restaurant) => {
   image.src = fullSrc;
   li.append(image);
 
-  const name = document.createElement('h1');
+  const name = document.createElement('h2');
   name.innerHTML = restaurant.name;
   li.append(name);
 

@@ -63,6 +63,7 @@ fillRestaurantHTML = (restaurant = self.restaurant) => {
         fullUrl + " 800w";
   image.setAttribute("srcset", srcset);
   image.src = fullUrl;
+  image.alt = restaurant.name;
 
   const cuisine = document.getElementById('restaurant-cuisine');
   cuisine.innerHTML = restaurant.cuisine_type;
