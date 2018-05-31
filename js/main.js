@@ -1,8 +1,9 @@
 let restaurants,
   neighborhoods,
-  cuisines
-var map
-var markers = []
+  cuisines;
+var map;
+var markers = [];
+let dbHelper = new DBHelper();
 
 /**
  * Fetch neighborhoods and cuisines as soon as the page is loaded.
@@ -16,13 +17,13 @@ document.addEventListener('DOMContentLoaded', (event) => {
  * Fetch all neighborhoods and set their HTML.
  */
 fetchNeighborhoods = () => {
-  DBHelper.fetchNeighborhoods((error, neighborhoods) => {
-    if (error) { // Got an error
-      console.error(error);
-    } else {
-      self.neighborhoods = neighborhoods;
-      fillNeighborhoodsHTML();
-    }
+  dbHelper.fetchNeighborhoods()
+  .then((neighborhoods) => {
+    self.neighborhoods = neighborhoods;
+    fillNeighborhoodsHTML();
+  })
+  .catch((error) => {
+    console.error(error);
   });
 }
 
@@ -43,13 +44,13 @@ fillNeighborhoodsHTML = (neighborhoods = self.neighborhoods) => {
  * Fetch all cuisines and set their HTML.
  */
 fetchCuisines = () => {
-  DBHelper.fetchCuisines((error, cuisines) => {
-    if (error) { // Got an error!
-      console.error(error);
-    } else {
-      self.cuisines = cuisines;
-      fillCuisinesHTML();
-    }
+  dbHelper.fetchCuisines()
+  .then((cuisines) => {
+    self.cuisines = cuisines;
+    fillCuisinesHTML();
+  })
+  .catch((error) => {
+    console.error(error);
   });
 }
 
@@ -80,6 +81,12 @@ window.initMap = () => {
     center: loc,
     scrollwheel: false
   });
+  window.setTimeout(() => {
+    let iframes = document.getElementsByTagName('iframe');
+    for (let i=0; i<iframes.length; i++) {
+      iframes[i].title = 'Google Maps IFrame';
+    }    
+  });
   updateRestaurants();
 }
 
@@ -96,14 +103,14 @@ updateRestaurants = () => {
   const cuisine = cSelect[cIndex].value;
   const neighborhood = nSelect[nIndex].value;
 
-  DBHelper.fetchRestaurantByCuisineAndNeighborhood(cuisine, neighborhood, (error, restaurants) => {
-    if (error) { // Got an error!
-      console.error(error);
-    } else {
-      resetRestaurants(restaurants);
-      fillRestaurantsHTML();
-    }
+  dbHelper.fetchRestaurantByCuisineAndNeighborhood(cuisine, neighborhood)
+  .then((restaurants) => {
+    resetRestaurants(restaurants);
+    fillRestaurantsHTML();
   })
+  .catch((error) => {
+    console.error(error);
+  });
 }
 
 /**
@@ -141,9 +148,9 @@ createRestaurantHTML = (restaurant) => {
   const image = document.createElement('img');
   image.className = 'restaurant-img';
   image.alt = restaurant.name;
-  var fullSrc = DBHelper.imageUrlForRestaurant(restaurant);
-  var srcset = DBHelper.imageUrlForRestaurant(restaurant, 200) + " 200w, " +
-               DBHelper.imageUrlForRestaurant(restaurant, 400) + " 400w, " +
+  var fullSrc = dbHelper.imageUrlForRestaurant(restaurant);
+  var srcset = dbHelper.imageUrlForRestaurant(restaurant, 200) + " 200w, " +
+               dbHelper.imageUrlForRestaurant(restaurant, 400) + " 400w, " +
                fullSrc + " 800w";
   image.setAttribute("srcset", srcset);
   image.src = fullSrc;
@@ -164,7 +171,7 @@ createRestaurantHTML = (restaurant) => {
   const more = document.createElement('a');
   more.innerHTML = 'View Details';
   more.setAttribute('role', 'button');
-  more.href = DBHelper.urlForRestaurant(restaurant);
+  more.href = dbHelper.urlForRestaurant(restaurant);
   li.append(more)
 
   return li
@@ -176,7 +183,7 @@ createRestaurantHTML = (restaurant) => {
 addMarkersToMap = (restaurants = self.restaurants) => {
   restaurants.forEach(restaurant => {
     // Add marker to the map
-    const marker = DBHelper.mapMarkerForRestaurant(restaurant, self.map);
+    const marker = dbHelper.mapMarkerForRestaurant(restaurant, self.map);
     google.maps.event.addListener(marker, 'click', () => {
       window.location.href = marker.url
     });

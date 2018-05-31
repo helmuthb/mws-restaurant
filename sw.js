@@ -16,7 +16,17 @@ self.addEventListener('install', function(event) {
       '/js/main.js',
       '/js/dbhelper.js',
       '/js/restaurant_info.js',
-      '/css/styles.css'
+      '/css/styles.css',
+      '/manifest.json',
+      '/mstile-150x150.png',
+      '/safari-pinned-tab.svg',
+      '/favicon.ico',
+      '/favicon-32x32.png',
+      '/favicon-16x16.png',
+      '/browserconfig.xml',
+      '/apple-touch-icon.png',
+      '/android-chrome-512x512.png',
+      '/android-chrome-192x192.png'
   ];
   event.waitUntil(
     caches.open(staticCacheName).then(function(cache) {
@@ -48,9 +58,9 @@ self.addEventListener('fetch', function(event) {
       event.respondWith(caches.match('/index.html'));
       return;
     }
-    console.log(requestUrl.pathname);
     if (requestUrl.pathname.startsWith('/restaurant.html')) {
         event.respondWith(caches.match('/restaurant.html'));
+        return;
     }
     if (requestUrl.pathname.startsWith('/img/')) {
       event.respondWith(serveImg(event.request));
