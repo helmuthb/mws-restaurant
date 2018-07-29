@@ -10,7 +10,7 @@ class DBHelper {
    * This will also open a connection to IndexedDB.
    */
   constructor() {
-    this.lastupdate = 0;
+    this.lastupdate = { restaurants: 0 };
     this.reloading = false;
     this.db = new Promise((resolve, reject) => {
       const rq = indexedDB.open('restaurant-store', 2);
@@ -50,7 +50,7 @@ class DBHelper {
    */
   _getDbURL(entity) {
     const port = 1337 // Change this to your server port
-    return `http://localhost:${port}/${entity}`;
+    return `http://localhost:${port}/${entity}/`;
   }
 
   /**
@@ -89,54 +89,46 @@ class DBHelper {
   /**
    * Returns a promise for when the store is filled with the JSON record.
    * It first clears the database.
+   * The promise resolves to true if data is found.
    * 
-   * @param {String} storeName the name of the store to be filled
    * @param {Array} data the data to be filled into the store
    */
-  _insertIntoStore(storeName, data) {
+  _insertRestaurantsFromData(data) {
     // check if the data is defined
     if (data) {
-      return this._clearStore(storeName)
+      return this._clearStore('restaurants')
+        .then(() => this._clearStore('reviews'))
         .then(() => this.db)
         .then(db => {
-          const store = this._getStore(db, storeName, true);
+          const store = this._getStore(db, 'restaurants', true);
           for (let record of data) {
             store.add(record, record.id);
           }
           return new Promise((resolve, reject) => {
-            store.transaction.oncomplete = resolve;
+            store.transaction.oncomplete = () => resolve(true);
             store.transaction.onerror = reject;
           });
       });
     }
     else {
-      return Promise.resolve();
+      return Promise.resolve(false);
     }
   }
 
   /**
    * Returns a promise for when the data has been initialized from the service.
    * If the fetch fails the old data will be reused.
+   * The promise resolves to true of data has been updated, false otherwise.
    */
-  _initializeFromService() {
-    // create two promises, one for restaurants...
-    const restaurants = fetch(this._getDbURL('restaurants'))
+  _initializeRestaurantsFromService() {
+    // create a promise for restaurants
+    return fetch(this._getDbURL('restaurants'))
       .then(response => response.json(), error => {
         console.log('Error when fetching restaurants', error);
-        // continue with the steps
+        // continue without error (no reloading)
         return undefined;
       })
-      .then(data => this._insertIntoStore('restaurants', data));
-    // ... and one for reviews
-    const reviews = fetch(this._getDbURL('reviews'))
-      .then(response => response.json(), error => {
-        console.log('Error when fetching reviews', error);
-        // continue with the steps
-        return undefined;
-      })
-      .then(data => this._insertIntoStore('reviews', data));
-    // Now get a promise which resolves when both are loaded
-    return Promise.all([restaurants, reviews]);
+      .then(data => this._insertRestaurantsFromData(data));
   }
 
   /**
@@ -151,13 +143,116 @@ class DBHelper {
         window.setTimeout(() => self._updateFromService().then(resolve), 10);
       });
     }
-    if (this.lastupdate > Date.now() - this.CACHE_LIFETIME) {
+    if (this.lastupdate.restaurants > Date.now() - this.CACHE_LIFETIME) {
       return Promise.resolve();
     }
     this.reloading = true;
-    return this._initializeFromService()
-      .then(() => {
-        this.lastupdate = Date.now();
+    return this._initializeRestaurantsFromService()
+      .then(reloaded => {
+        // we have reloaded all data - so let's clear it
+        if (reloaded) {
+          this.lastupdate = { restaurants: Date.now() };
+        }
+        this.reloading = false;
+      });
+  }
+
+  /**
+   * Delete all reviews in the store for a restaurant, except local ones.
+   * @param {Number} restaurant_id the ID of the restaurant
+   * @returns a promise which resolves afterwards
+   */
+  _clearReviews(restaurant_id) {
+    let self = this;
+    return this.db
+      .then(db => new Promise((resolve, reject) => {
+        const store = self._getStore(db, 'reviews', true);
+        const idx = store.index('restaurant');
+        const key = IDBKeyRange.only(restaurant_id);
+        const request = idx.openCursor(key);
+        request.onsuccess = () => {
+          const cursor = request.result;
+          if (cursor) {
+            // next element ...
+            if (cursor.value.id > 0) store.delete(cursor.value.id);
+            cursor.continue();
+          }
+          else {
+            // end of cursor
+            resolve();
+          }
+        }
+        request.onerror = reject;
+      }));
+  }
+
+  /**
+   * Store reviews from a JSON struct into the IndexedDB.
+   * @param {Number} restaurant_id the ID of the restaurant
+   * @param {Array} data an array of reviews
+   * @returns a promise which resolves to true if data was stored
+   */
+  _insertReviewsFromData(restaurant_id, data) {
+    // check if the data is defined
+    if (data) {
+      return this._clearReviews(restaurant_id)
+        .then(() => this.db)
+        .then(db => {
+          const store = this._getStore(db, 'reviews', true);
+          for (let record of data) {
+            store.add(record, record.id);
+          }
+          return new Promise((resolve, reject) => {
+            store.transaction.oncomplete = () => resolve(true);
+            store.transaction.onerror = reject;
+          });
+      });
+    }
+    else {
+      return Promise.resolve(false);
+    }
+  }
+
+  /**
+   * Returns a promise for when the data has been initialized from the service.
+   * If the fetch fails the old data will be reused.
+   * The promise resolves to true of data has been updated, false otherwise.
+   * @param {Number} restaurant_id the ID of the restaurant
+   */
+  _initializeReviewsFromService(restaurant_id) {
+    // create a promise for restaurants
+    return fetch(this._getDbURL('reviews') + `?restaurant_id=${restaurant_id}`)
+      .then(response => response.json(), error => {
+        console.log('Error when fetching reviews', error);
+        // continue without error (no reloading)
+        return undefined;
+      })
+      .then(data => this._insertReviewsFromData(restaurant_id, data));
+  }
+
+  /**
+   * Update the data if it is stale.
+   * Return a promise when the data has been updated.
+   */
+  _updateReviewsFromService(restaurant_id) {
+    if (this.reloading) {
+      // wait 10ms, then try again
+      let self = this;
+      return new Promise((resolve, reject) => {
+        window.setTimeout(() => self._updateReviewsFromService(restaurant_id).then(resolve), 10);
+      });
+    }
+    if (restaurant_id in this.lastupdate &&
+        this.lastupdate[restaurant_id] > Date.now() - this.CACHE_LIFETIME) {
+      return Promise.resolve();
+    }
+    this.reloading = true;
+    return this._initializeReviewsFromService(restaurant_id)
+      .then(reloaded => {
+        // we have reloaded all data - so let's clear it
+        if (reloaded) {
+          this.lastupdate[restaurant_id] = Date.now();
+        }
         this.reloading = false;
       });
   }
@@ -167,7 +262,6 @@ class DBHelper {
    */
   _cursorToArray(request) {
     return new Promise((resolve, reject) => {
-      //
       let results = [];
       request.onsuccess = () => {
         const cursor = request.result;
@@ -184,7 +278,7 @@ class DBHelper {
           resolve(results);
         }
       };
-      request.onerror = (event) => reject(event);
+      request.onerror = reject;
     });
   }
 
@@ -228,8 +322,7 @@ class DBHelper {
    * @param {String} value the value of the indexed field used as filter
    */
   _fetchByIndex(storeName, index, value) {
-    return this._updateFromService()
-      .then(() => this.db)
+    return this.db
       .then(db => {
         const store = this._getStore(db, storeName, false);
         const idx = store.index(index);
@@ -238,12 +331,24 @@ class DBHelper {
         return this._cursorToArray(request);
       });
   }
+
+  /**
+   * Fetch restaurants filtered by an index
+   * 
+   * @param {String} index the name of the index to be used
+   * @param {String} value the value of the indexed field used as filter
+   */
+  _fetchRestaurantsByIndex(index, value) {
+    return this._updateFromService()
+      .then(() => this._fetchByIndex('restaurants', index, value));
+  }
+
   /**
    * Fetch restaurants by a cuisine type with proper error handling.
    * Returns a promise which resolves to the array of restaurants.
    */
   fetchRestaurantByCuisine(cuisine) {
-    return this._fetchByIndex('restaurants', 'cuisine', cuisine);
+    return this._fetchRestaurantsByIndex('cuisine', cuisine);
   }
 
   /**
@@ -251,7 +356,7 @@ class DBHelper {
    * Returns a promise which resolves to the array of restaurants.
    */
   fetchRestaurantByNeighborhood(neighborhood) {
-    return this._fetchByIndex('restaurants', 'neighborhood', neighborhood);
+    return this._fetchRestaurantsByIndex('neighborhood', neighborhood);
   }
 
   /**
@@ -268,7 +373,7 @@ class DBHelper {
     if (cuisine === 'all') {
       return this.fetchRestaurantByNeighborhood(neighborhood);
     }
-    return this._fetchByIndex('restaurants', 'cuisine_neighborhood', [cuisine, neighborhood]);
+    return this._fetchRestaurantsByIndex('cuisine_neighborhood', [cuisine, neighborhood]);
   }
 
   /**
@@ -278,7 +383,8 @@ class DBHelper {
    * @param {Number} restaurant_id the ID value of the restaurant
    */
   fetchReviews(restaurant_id) {
-    return this._fetchByIndex('reviews', 'restaurant', restaurant_id);
+    return this._updateReviewsFromService(restaurant_id)
+      .then(() => this._fetchByIndex('reviews', 'restaurant', restaurant_id));
   }
 
   /**
@@ -305,7 +411,7 @@ class DBHelper {
         .then(favorite => {
           // store in the API service
           const url = this._getDbURL('restaurants') +
-                      `/${restaurant_id}?is_favorite=${favorite}`;
+                      `${restaurant_id}?is_favorite=${favorite}`;
           return fetch(url, { method: 'PUT'}).then(() => favorite);
         })
       })
@@ -313,6 +419,33 @@ class DBHelper {
         console.log('Error when updating favorite status', error);
         return undefined;
       });
+  }
+
+  /**
+   * Add a review to a restaurant
+   * 
+   * @param {Number} restaurant_id restaurant ID value
+   * @param {String} name name of the reviewer
+   * @param {Number} rating rating from 1 to 5
+   * @param {String} comments review comments
+   */
+  addReview(restaurant_id, name, rating, comments) {
+    const review = { restaurant_id, name, rating, comments};
+    console.log(review);
+    fetch(this._getDbURL('reviews'),
+          { method: "POST", headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(review) })
+      .then(res => {
+        if (res.ok) {
+          // All OK, the review was posted to the server
+          console.log(res);
+          return res.json();
+        }
+      })
+      .then(json => {
+        console.log(json);
+      });
+    // TODO
   }
 
   /**
@@ -383,5 +516,4 @@ class DBHelper {
     );
     return marker;
   }
-
 }

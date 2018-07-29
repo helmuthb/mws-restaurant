@@ -232,14 +232,14 @@ nav h1 a {
   margin: 0;
   padding: 0;
 }
-#reviews-list li {
+#reviews-list li, #review-form {
   background-color: #fff;
   border: 2px solid #f3f3f3;
   display: block;
   list-style-type: none;
   margin: 0 0 30px;
   overflow: hidden;
-  padding: 0 20px 20px;
+  padding: 20px 20px 20px;
   position: relative;
   width: 85%;
 }
@@ -248,6 +248,33 @@ nav h1 a {
 }
 #restaurant-hours td {
   color: #666;
+}
+#review-form label {
+  display: block;
+  margin: 0;
+  padding: 0 10px;
+  position: relative;
+  width: 85%;
+}
+
+#review-form input, #review-form textarea {
+  display: block;
+  margin: 0 10px 10px;
+  position: relative;
+  width: 85%;
+}
+
+#reviewer-name {
+  height: 2em;
+}
+
+#reviewer-comment {
+  height: 10em;
+}
+
+#reviewer-submit {
+  height: 3em;
+  -webkit-appearance: button;
 }
 
 @media only screen and (min-width: 800px) {

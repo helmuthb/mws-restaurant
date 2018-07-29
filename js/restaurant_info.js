@@ -148,6 +148,19 @@ let fillReviewsHTML = (reviews) => {
     ul.appendChild(createReviewHTML(review));
   });
   container.appendChild(ul);
+
+  const formTitle = document.createElement('h2');
+  formTitle.innerHTML = 'Add Your Review';
+  container.appendChild(formTitle);
+  const form = document.getElementById('review-form');
+  form.onsubmit = (e) => {
+    const reviewer = document.getElementById('reviewer-name').value;
+    const rating = document.getElementById('reviewer-rating').value;
+    const comment = document.getElementById('reviewer-comment').value;
+    dbHelper.addReview(self.restaurant.id, reviewer, rating, comment);
+    return false;
+  };
+  container.appendChild(form);
 };
 
 /**

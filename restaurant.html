@@ -57,6 +57,15 @@
       <!-- Beginning reviews -->
       <section id="reviews-container">
         <ul id="reviews-list"></ul>
+        <form id="review-form">
+          <label for="reviewer-name">Your Name:</label><br>
+          <input id="reviewer-name" required><br>
+          <label for="reviewer-rating">Your Rating (1-5):</label><br>
+          <input id="reviewer-rating" type="range" min="1" max="5" value="1"><br>
+          <label for="reviewer-comment">Comments:</label><br>
+          <textarea id="reviewer-comment" required></textarea><br>
+          <input id="reviewer-submit" type="submit" value="Save Review">
+        </form>
       </section>
       <!-- End reviews -->
     </div>
