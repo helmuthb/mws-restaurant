@@ -58,12 +58,18 @@ let fetchRestaurantFromURL = (callback) => {
   }
 };
 
+let restaurantName = (restaurant = self.restaurant) => {
+  const favorite = restaurant.is_favorite ? '♥' : '♡';
+  return restaurant.name + ' ' + favorite;
+}
+
 /**
  * Create restaurant HTML and add it to the webpage
  */
 let fillRestaurantHTML = (restaurant = self.restaurant) => {
   const name = document.getElementById('restaurant-name');
-  name.innerHTML = restaurant.name;
+  name.innerHTML = restaurantName(restaurant);
+  name.addEventListener('click', () => toggleFavorite());
 
   const address = document.getElementById('restaurant-address');
   address.innerHTML = restaurant.address;
@@ -86,6 +92,21 @@ let fillRestaurantHTML = (restaurant = self.restaurant) => {
     fillRestaurantHoursHTML();
   }
 };
+
+/**
+ * Toggle the favorite-status of a restaurant.
+ * @param {Restaurant} restaurant object to be toggled as a favorite
+ */
+let toggleFavorite = (restaurant = self.restaurant) => {
+  dbHelper.toggleFavorite(restaurant.id)
+    .then(favorite => {
+      if (typeof favorite == 'boolean') {
+        const name = document.getElementById('restaurant-name');
+        restaurant.is_favorite = favorite;
+        name.innerHTML = restaurantName(restaurant);
+      }
+    });
+}
 
 /**
  * Create restaurant operating hours HTML table and add it to the webpage.
@@ -133,7 +154,7 @@ let fillReviewsHTML = (reviews) => {
  * Convert a UNIX epoch value to a readable date string.
  * Inspired by https://stackoverflow.com/a/6078873/813725
  * 
- * @param {Number} timestamp number of milliseconds since 1. 1. 1970
+ * @param {Number} timestamp number of milliseconds since 1. 1. 1970, or a string value
  */
 let formattedDate = (timestamp) => {
   const date = new Date(timestamp);

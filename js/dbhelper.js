@@ -169,8 +169,8 @@ class DBHelper {
     return new Promise((resolve, reject) => {
       //
       let results = [];
-      request.onsuccess = (event) => {
-        const cursor = event.target.result;
+      request.onsuccess = () => {
+        const cursor = request.result;
         if (cursor) {
           if ('value' in cursor) {
             results.push(cursor.value);
@@ -279,6 +279,40 @@ class DBHelper {
    */
   fetchReviews(restaurant_id) {
     return this._fetchByIndex('reviews', 'restaurant', restaurant_id);
+  }
+
+  /**
+   * Toggle the favorite status of a restaurant
+   * @param {Number} restaurant_id the ID of the restaurant
+   * @returns a promise resolving to the new favorite status of the restaurant
+   */
+  toggleFavorite(restaurant_id) {
+    return this.db
+      .then(db => {
+        const store = this._getStore(db, 'restaurants', true);
+        const rq = store.get(restaurant_id);
+        return new Promise((resolve, reject) => {
+          rq.onsuccess = () => {
+            const restaurant = rq.result;
+            restaurant.is_favorite = !restaurant.is_favorite;
+            store.put(restaurant, restaurant_id);
+            store.transaction.oncomplete = () => {
+              resolve(restaurant.is_favorite);
+            };
+            store.transaction.onerror = reject;
+          }
+        })
+        .then(favorite => {
+          // store in the API service
+          const url = this._getDbURL('restaurants') +
+                      `/${restaurant_id}?is_favorite=${favorite}`;
+          return fetch(url, { method: 'PUT'}).then(() => favorite);
+        })
+      })
+      .catch(error => {
+        console.log('Error when updating favorite status', error);
+        return undefined;
+      });
   }
 
   /**
