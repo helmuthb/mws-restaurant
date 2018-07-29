@@ -1,3 +1,5 @@
+'use strict';
+
 /**
  * Common database helper functions.
  */
@@ -10,7 +12,8 @@ class DBHelper {
   constructor() {
     this.restaurants = undefined;
     this.lastupdate = 0;
-    this._dbPromise = new Promise((resolve, reject) => {
+    this.reloading = false;
+    this.db = new Promise((resolve, reject) => {
       const rq = indexedDB.open('restaurant-store', 1);
       rq.onsuccess = (event) => resolve(event.target.result);
       rq.onerror = (event) => reject(event.target.errorCode);
@@ -32,6 +35,7 @@ class DBHelper {
     // ten minutes
     return 1000 * 60 * 10;
   }
+
   /**
    * Database URL.
    * Change this to restaurants.json file location on your server.
@@ -42,65 +46,84 @@ class DBHelper {
   }
 
   /**
-   * Get promise for transaction
+   * Get a store - readonly or read-write
+   *
+   * @param {Database} db the resolved IDB
+   * @param {Boolean} rw is writing required?
+   * @return the store in a transaction, opened in the right mode
    */
-  _transaction(mode = 'readonly') {
-    return this._dbPromise.then((db) => {
-      // create new transaction
-      return db.transaction(["restaurants"], mode);
-    });
+  _getStore(db, rw = false) {
+    const transaction = db.transaction(['restaurants'], rw ? 'readwrite': 'readonly');
+    return transaction.objectStore('restaurants');
   }
 
   /**
-   * Get promise for store (read-only)
+   * Return a promise for when the store is cleared of data.
    */
-  _store() {
-    return this._transaction().then((transaction) => {
-      return transaction.objectStore("restaurants");
-    });
-  }
-
-  /**
-   * Get a store promise (read-only) with up-to-date data.
-   * Refresh if the last fetch from the service was long ago.
-   */
-  get store() {
-    if (this.lastupdate > Date.now() - this.CACHE_LIFETIME) {
-      return this._store();
-    }
-    return fetch(this.DATABASE_URL)
-      .then((response) => {
-        // parse as JSON
-        return response.json();
-      })
-      .then((data) => {
-        // First delete existing data in IndexedDB
-        // then insert new data
-        return this._transaction('readwrite').then((transaction) => {
-          let store = transaction.objectStore('restaurants');
-          // clear store
-          store.clear().onsuccess = (event) => {
-            // now add all restaurant elements
-            for (let r of data) {
-              store.add(r, r.id);
-            }
-          };
-          // now return a promise which resolves to the DB
-          // once the transaction is finished
-          return new Promise((resolve, reject) => {
-            transaction.oncomplete = () => {
-              // set last update time
-              this.lastupdate = Date.now();
-              resolve(this._store());
-            };
-            transaction.onerror = (event) => reject(event);
-          });
-        });
-      })
-      .catch((error) => {
-        // offline - so we send the last data as before.
-        return this._store();
+  _clearStore() {
+    return this.db.then(db => {
+      const store = this._getStore(db, true);
+      return new Promise((resolve, reject) => {
+        store.clear();
+        store.transaction.oncomplete = resolve;
       });
+    });
+  }
+
+  /**
+   * Returns a promise for when the store is filled with the JSON record.
+   */
+  _insertIntoStore(data) {
+    return this.db.then(db => {
+      const store = this._getStore(db, true);
+      for (let r of data) {
+        store.add(r, r.id);
+      }
+      return new Promise((resolve, reject) => {
+        store.transaction.oncomplete = resolve;
+        store.transaction.onerror = reject;
+      })
+    })
+  }
+
+  /**
+   * Returns a promise for when the data has been initialized from the service.
+   */
+  _initializeFromService() {
+    return this._clearStore()
+      .then(() => fetch(this.DATABASE_URL))
+      .then(response => response.json())
+      .then(data => this._insertIntoStore(data));
+  }
+
+  /**
+   * Update the data if it is stale.
+   * Return a promise when the data has been updated.
+   */
+  _updateFromService() {
+    if (this.reloading) {
+      // wait 10ms, then try again
+      let self = this;
+      return new Promise((resolve, reject) => {
+        window.setTimeout(() => self._updateFromService().then(resolve), 10);
+      });
+    }
+    else {
+      return new Promise((resolve, reject) => {
+        if (this.lastupdate > Date.now() - this.CACHE_LIFETIME) {
+          resolve();
+        }
+        else {
+          this.reloading = true;
+          this._initializeFromService()
+            .then(() => {
+              this.lastupdate = Date.now();
+              this.reloading = false;
+              resolve();
+            });
+        }
+      });
+    }
   }
 
   /**
@@ -134,11 +157,13 @@ class DBHelper {
    * Returns a promise which resolves to an array.
    */
   fetchRestaurants() {
-    return this.store.then((store) => {
-      // return restaurants
-      const request = store.openCursor();
-      return this._cursorToArray(request);
-    });
+    return this._updateFromService()
+      .then(() => this.db)
+      .then(db => {
+        const store = this._getStore(db, false);
+        const request = store.openCursor();
+        return this._cursorToArray(request);
+      });
   }
 
   /**
@@ -146,26 +171,41 @@ class DBHelper {
    * Returns a promise which resolves to the single restaurant.
    */
   fetchRestaurantById(id) {
-    return this.store.then((store) => {
-      return new Promise((resolve, reject) => {
+    return this._updateFromService()
+      .then(() => this.db)
+      .then(db => {
+        const store = this._getStore(db, false);
         const request = store.get(id);
-        request.onsuccess = () => resolve(request.result);
-        request.onerror = (event) => reject(event);
-      });
+        return new Promise((resolve, reject) => {
+          request.onsuccess = () => { resolve(request.result); };
+          request.onerror = reject;
+        });
     });
   }
 
+  /**
+   * Fetch restaurants filtered by an index with proper error handling.
+   * Returns a promise which resolves to the array of restaurants.
+   * @param {String} index the name of the index to be used
+   * @param {String} value the value of the indexed field used as filter
+   */
+  _fetchByIndex(index, value) {
+    return this._updateFromService()
+      .then(() => this.db)
+      .then(db => {
+        const store = this._getStore(db, false);
+        const idx = store.index(index);
+        const key = IDBKeyRange.only(value);
+        const request = idx.openCursor(key);
+        return this._cursorToArray(request);
+      });
+  }
   /**
    * Fetch restaurants by a cuisine type with proper error handling.
    * Returns a promise which resolves to the array of restaurants.
    */
   fetchRestaurantByCuisine(cuisine) {
-    return this.store.then((store) => {
-      const idx = store.index('cuisine');
-      const key = IDBKeyRange.only(cuisine);
-      const request = idx.openCursor(key);
-      return this._cursorToArray(request);
-    });
+    return this._fetchByIndex('cuisine', cuisine);
   }
 
   /**
@@ -173,12 +213,7 @@ class DBHelper {
    * Returns a promise which resolves to the array of restaurants.
    */
   fetchRestaurantByNeighborhood(neighborhood) {
-    return this.store.then((store) => {
-      const idx = store.index('neighborhood');
-      const key = IDBKeyRange.only(neighborhood);
-      const request = idx.openCursor(key);
-      return this._cursorToArray(request);
-    });
+    return this._fetchByIndex('neighborhood', neighborhood);
   }
 
   /**
@@ -195,24 +230,31 @@ class DBHelper {
     if (cuisine === 'all') {
       return this.fetchRestaurantByNeighborhood(neighborhood);
     }
-    return this.store.then((store) => {
-      const idx = store.index('cuisine_neighborhood');
-      const key = IDBKeyRange.only([cuisine, neighborhood]);
-      const request = idx.openCursor(key);
-      return this._cursorToArray(request);
-    });
+    return this._fetchByIndex('cuisine_neighborhood', [cuisine, neighborhood]);
+  }
+
+  /**
+   * Fetch all possible values of an index.
+   * Returns a promise of an array of values.
+   * @param {String} index Name of the index to be used
+   */
+  _getIndexRange(index) {
+    return this._updateFromService()
+      .then(() => this.db)
+      .then(db => {
+        const store = this._getStore(db, false);
+        const idx = store.index(index);
+        const request = idx.openKeyCursor(undefined, 'nextunique');
+        return this._cursorToArray(request);
+      });
   }
 
   /**
    * Fetch all neighborhoods with proper error handling.
    * Returns a promise of an array of neighborhoods.
    */
-  fetchNeighborhoods(callback) {
-    return this.store.then((store) => {
-      const idx = store.index('neighborhood');
-      const request = idx.openKeyCursor(undefined, 'nextunique');
-      return this._cursorToArray(request);
-    });
+  fetchNeighborhoods() {
+    return this._getIndexRange('neighborhood');
   }
 
   /**
@@ -220,11 +262,7 @@ class DBHelper {
    * Returns a promise of an array of cuisines.
    */
   fetchCuisines(callback) {
-    return this.store.then((store) => {
-      const idx = store.index('cuisine');
-      const request = idx.openKeyCursor(undefined, 'nextunique');
-      return this._cursorToArray(request);
-    });
+    return this._getIndexRange('cuisine');
   }
 
   /**

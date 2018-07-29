@@ -2,8 +2,10 @@
   "name": "mws-restaurant",
   "version": "1.0.0",
   "description": "Mobile Web Udacity project",
-  "private": "true",
-  "dependencies": {},
+  "private": true,
+  "dependencies": {
+    "browser-sync": "^2.24.6"
+  },
   "devDependencies": {},
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"

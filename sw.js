@@ -1,10 +1,12 @@
+'use strict';
+
 /**
  * Service worker based on the code provided in the course
  * material about service workers (Udacity Mobile Web Nanodegree)
  */
-var staticCacheName = 'restaurant-static-v1';
-var contentImgsCache = 'restaurant-content-imgs';
-var allCaches = [
+const staticCacheName = 'restaurant-static-v1';
+const contentImgsCache = 'restaurant-content-imgs';
+const allCaches = [
   staticCacheName,
   contentImgsCache
 ];
