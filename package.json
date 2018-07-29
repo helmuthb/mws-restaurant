@@ -1,0 +1,21 @@
+{
+  "name": "mws-restaurant",
+  "version": "1.0.0",
+  "description": "Mobile Web Udacity project",
+  "private": "true",
+  "dependencies": {},
+  "devDependencies": {},
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/helmuthb/mws-restaurant.git"
+  },
+  "author": "Helmuth Breitenfellner",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/helmuthb/mws-restaurant/issues"
+  },
+  "homepage": "https://github.com/helmuthb/mws-restaurant#readme"
+}
