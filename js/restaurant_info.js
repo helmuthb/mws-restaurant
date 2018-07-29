@@ -27,7 +27,7 @@ window.initMap = () => {
       dbHelper.mapMarkerForRestaurant(self.restaurant, self.map);
     }
   });
-}
+};
 
 /**
  * Get current restaurant from page URL.
@@ -43,16 +43,20 @@ let fetchRestaurantFromURL = (callback) => {
     callback(error, null);
   } else {
     dbHelper.fetchRestaurantById(parseInt(id))
-    .then((r) => {
-      self.restaurant = r;
+    .then(restaurant => {
+      self.restaurant = restaurant;
       fillRestaurantHTML();
-      callback(null, r)
+      dbHelper.fetchReviews(restaurant.id)
+      .then(review => {
+        fillReviewsHTML(review);
+        callback(null, restaurant);
+      })
     })
     .catch((error) => {
       console.error(error);
     });
   }
-}
+};
 
 /**
  * Create restaurant HTML and add it to the webpage
@@ -81,9 +85,7 @@ let fillRestaurantHTML = (restaurant = self.restaurant) => {
   if (restaurant.operating_hours) {
     fillRestaurantHoursHTML();
   }
-  // fill reviews
-  fillReviewsHTML();
-}
+};
 
 /**
  * Create restaurant operating hours HTML table and add it to the webpage.
@@ -103,12 +105,12 @@ let fillRestaurantHoursHTML = (operatingHours = self.restaurant.operating_hours)
 
     hours.appendChild(row);
   }
-}
+};
 
 /**
  * Create all reviews HTML and add them to the webpage.
  */
-let fillReviewsHTML = (reviews = self.restaurant.reviews) => {
+let fillReviewsHTML = (reviews) => {
   const container = document.getElementById('reviews-container');
   const title = document.createElement('h2');
   title.innerHTML = 'Reviews';
@@ -125,6 +127,18 @@ let fillReviewsHTML = (reviews = self.restaurant.reviews) => {
     ul.appendChild(createReviewHTML(review));
   });
   container.appendChild(ul);
+};
+
+/**
+ * Convert a UNIX epoch value to a readable date string.
+ * Inspired by https://stackoverflow.com/a/6078873/813725
+ * 
+ * @param {Number} timestamp number of milliseconds since 1. 1. 1970
+ */
+let formattedDate = (timestamp) => {
+  const date = new Date(timestamp);
+  const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  return date.getDate() + ' ' + months[date.getMonth()] + ' ' + date.getFullYear();
 }
 
 /**
@@ -137,7 +151,8 @@ let createReviewHTML = (review) => {
   li.appendChild(name);
 
   const date = document.createElement('p');
-  date.innerHTML = review.date;
+  
+  date.innerHTML = formattedDate(review.updateAt || review.createdAt);
   li.appendChild(date);
 
   const rating = document.createElement('p');
@@ -149,7 +164,7 @@ let createReviewHTML = (review) => {
   li.appendChild(comments);
 
   return li;
-}
+};
 
 /**
  * Add restaurant name to the breadcrumb navigation menu
@@ -159,7 +174,7 @@ let fillBreadcrumb = (restaurant=self.restaurant) => {
   const li = document.createElement('li');
   li.innerHTML = restaurant.name;
   breadcrumb.appendChild(li);
-}
+};
 
 /**
  * Get a parameter by name from page URL.
@@ -175,4 +190,8 @@ let getParameterByName = (name, url) => {
   if (!results[2])
     return '';
   return decodeURIComponent(results[2].replace(/\+/g, ' '));
+};
+
+let getReviews = (restaurant_id) => {
+  //
 }

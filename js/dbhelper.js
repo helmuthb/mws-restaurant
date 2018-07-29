@@ -10,20 +10,26 @@ class DBHelper {
    * This will also open a connection to IndexedDB.
    */
   constructor() {
-    this.restaurants = undefined;
     this.lastupdate = 0;
     this.reloading = false;
     this.db = new Promise((resolve, reject) => {
-      const rq = indexedDB.open('restaurant-store', 1);
-      rq.onsuccess = (event) => resolve(event.target.result);
+      const rq = indexedDB.open('restaurant-store', 2);
+      rq.onsuccess = () => resolve(rq.result);
       rq.onerror = (event) => reject(event.target.errorCode);
       rq.onupgradeneeded = (event) => {
-        const db = event.target.result;
-        this.restaurants = db.createObjectStore('restaurants', { keypath: 'id' });
-        // created indexes
-        this.restaurants.createIndex('neighborhood', 'neighborhood', { unique: false });
-        this.restaurants.createIndex('cuisine', 'cuisine_type', { unique: false });
-        this.restaurants.createIndex('cuisine_neighborhood', ['cuisine_type', 'neighborhood'], { unique: false, multiEntry: false });
+        const db = rq.result;
+        if (event.oldVersion < 1) {
+          let restaurants = db.createObjectStore('restaurants', { keypath: 'id' });
+          // create indexes
+          restaurants.createIndex('neighborhood', 'neighborhood', { unique: false });
+          restaurants.createIndex('cuisine', 'cuisine_type', { unique: false });
+          restaurants.createIndex('cuisine_neighborhood', ['cuisine_type', 'neighborhood'], { unique: false, multiEntry: false });
+        }
+        if (event.oldVersion < 2) {
+          let reviews = db.createObjectStore('reviews', { keypath: 'id' });
+          // create index
+          reviews.createIndex('restaurant', 'restaurant_id', { unique: false });
+        }
       }
     });
   }
@@ -33,67 +39,104 @@ class DBHelper {
    */
   get CACHE_LIFETIME() {
     // ten minutes
-    return 1000 * 60 * 10;
+    // return 1000 * 60 * 10;
+    return 10;
   }
 
   /**
-   * Database URL.
-   * Change this to restaurants.json file location on your server.
+   * Get the Database URL.
+   * 
+   * @param {String} entity name of the entity to be fetched
    */
-  get DATABASE_URL() {
+  _getDbURL(entity) {
     const port = 1337 // Change this to your server port
-    return `http://localhost:${port}/restaurants`;
+    return `http://localhost:${port}/${entity}`;
   }
 
   /**
    * Get a store - readonly or read-write
    *
    * @param {Database} db the resolved IDB
+   * @param {String} storeName the name of the store
    * @param {Boolean} rw is writing required?
    * @return the store in a transaction, opened in the right mode
    */
-  _getStore(db, rw = false) {
-    const transaction = db.transaction(['restaurants'], rw ? 'readwrite': 'readonly');
-    return transaction.objectStore('restaurants');
+  _getStore(db, storeName, rw = false) {
+    const transaction = db.transaction([storeName], rw ? 'readwrite': 'readonly');
+    return transaction.objectStore(storeName);
   }
 
   /**
-   * Return a promise for when the store is cleared of data.
+   * Return a promise for when the specified store is cleared of data.
+   * 
+   * @param {String} storeName the name of the store to be cleared
+   * @returns a promise which will be resolved once the store is cleared
    */
-  _clearStore() {
-    return this.db.then(db => {
-      const store = this._getStore(db, true);
-      return new Promise((resolve, reject) => {
-        store.clear();
-        store.transaction.oncomplete = resolve;
-      });
+  _clearStore(storeName) {
+    return this.db
+      .then(db => {
+        // delete store
+        const store = this._getStore(db, storeName, true);
+        return new Promise((resolve, reject) => {
+          // only delete elements with id >= 0
+          const keyrange = IDBKeyRange.lowerBound(0);
+          store.delete(keyrange);
+          store.transaction.oncomplete = () => resolve(db);
+        });
     });
   }
 
   /**
    * Returns a promise for when the store is filled with the JSON record.
+   * It first clears the database.
+   * 
+   * @param {String} storeName the name of the store to be filled
+   * @param {Array} data the data to be filled into the store
    */
-  _insertIntoStore(data) {
-    return this.db.then(db => {
-      const store = this._getStore(db, true);
-      for (let r of data) {
-        store.add(r, r.id);
-      }
-      return new Promise((resolve, reject) => {
-        store.transaction.oncomplete = resolve;
-        store.transaction.onerror = reject;
-      })
-    })
+  _insertIntoStore(storeName, data) {
+    // check if the data is defined
+    if (data) {
+      return this._clearStore(storeName)
+        .then(() => this.db)
+        .then(db => {
+          const store = this._getStore(db, storeName, true);
+          for (let record of data) {
+            store.add(record, record.id);
+          }
+          return new Promise((resolve, reject) => {
+            store.transaction.oncomplete = resolve;
+            store.transaction.onerror = reject;
+          });
+      });
+    }
+    else {
+      return Promise.resolve();
+    }
   }
 
   /**
    * Returns a promise for when the data has been initialized from the service.
+   * If the fetch fails the old data will be reused.
    */
   _initializeFromService() {
-    return this._clearStore()
-      .then(() => fetch(this.DATABASE_URL))
-      .then(response => response.json())
-      .then(data => this._insertIntoStore(data));
+    // create two promises, one for restaurants...
+    const restaurants = fetch(this._getDbURL('restaurants'))
+      .then(response => response.json(), error => {
+        console.log('Error when fetching restaurants', error);
+        // continue with the steps
+        return undefined;
+      })
+      .then(data => this._insertIntoStore('restaurants', data));
+    // ... and one for reviews
+    const reviews = fetch(this._getDbURL('reviews'))
+      .then(response => response.json(), error => {
+        console.log('Error when fetching reviews', error);
+        // continue with the steps
+        return undefined;
+      })
+      .then(data => this._insertIntoStore('reviews', data));
+    // Now get a promise which resolves when both are loaded
+    return Promise.all([restaurants, reviews]);
   }
 
   /**
@@ -108,22 +151,15 @@ class DBHelper {
         window.setTimeout(() => self._updateFromService().then(resolve), 10);
       });
     }
-    else {
-      return new Promise((resolve, reject) => {
-        if (this.lastupdate > Date.now() - this.CACHE_LIFETIME) {
-          resolve();
-        }
-        else {
-          this.reloading = true;
-          this._initializeFromService()
-            .then(() => {
-              this.lastupdate = Date.now();
-              this.reloading = false;
-              resolve();
-            });
-        }
-      });
+    if (this.lastupdate > Date.now() - this.CACHE_LIFETIME) {
+      return Promise.resolve();
     }
+    this.reloading = true;
+    return this._initializeFromService()
+      .then(() => {
+        this.lastupdate = Date.now();
+        this.reloading = false;
+      });
   }
 
   /**
@@ -160,7 +196,7 @@ class DBHelper {
     return this._updateFromService()
       .then(() => this.db)
       .then(db => {
-        const store = this._getStore(db, false);
+        const store = this._getStore(db, 'restaurants', false);
         const request = store.openCursor();
         return this._cursorToArray(request);
       });
@@ -174,7 +210,7 @@ class DBHelper {
     return this._updateFromService()
       .then(() => this.db)
       .then(db => {
-        const store = this._getStore(db, false);
+        const store = this._getStore(db, 'restaurants', false);
         const request = store.get(id);
         return new Promise((resolve, reject) => {
           request.onsuccess = () => { resolve(request.result); };
@@ -184,16 +220,18 @@ class DBHelper {
   }
 
   /**
-   * Fetch restaurants filtered by an index with proper error handling.
-   * Returns a promise which resolves to the array of restaurants.
+   * Fetch items filtered by an index with proper error handling.
+   * Returns a promise which resolves to the array of items.
+   * 
+   * @param {String} storeName the name of the store to be used
    * @param {String} index the name of the index to be used
    * @param {String} value the value of the indexed field used as filter
    */
-  _fetchByIndex(index, value) {
+  _fetchByIndex(storeName, index, value) {
     return this._updateFromService()
       .then(() => this.db)
       .then(db => {
-        const store = this._getStore(db, false);
+        const store = this._getStore(db, storeName, false);
         const idx = store.index(index);
         const key = IDBKeyRange.only(value);
         const request = idx.openCursor(key);
@@ -205,7 +243,7 @@ class DBHelper {
    * Returns a promise which resolves to the array of restaurants.
    */
   fetchRestaurantByCuisine(cuisine) {
-    return this._fetchByIndex('cuisine', cuisine);
+    return this._fetchByIndex('restaurants', 'cuisine', cuisine);
   }
 
   /**
@@ -213,7 +251,7 @@ class DBHelper {
    * Returns a promise which resolves to the array of restaurants.
    */
   fetchRestaurantByNeighborhood(neighborhood) {
-    return this._fetchByIndex('neighborhood', neighborhood);
+    return this._fetchByIndex('restaurants', 'neighborhood', neighborhood);
   }
 
   /**
@@ -230,19 +268,29 @@ class DBHelper {
     if (cuisine === 'all') {
       return this.fetchRestaurantByNeighborhood(neighborhood);
     }
-    return this._fetchByIndex('cuisine_neighborhood', [cuisine, neighborhood]);
+    return this._fetchByIndex('restaurants', 'cuisine_neighborhood', [cuisine, neighborhood]);
   }
 
   /**
-   * Fetch all possible values of an index.
+   * Fetch reviews for a specific restaurant.
+   * Returns a promise which resolves to the array of reviews.
+   * 
+   * @param {Number} restaurant_id the ID value of the restaurant
+   */
+  fetchReviews(restaurant_id) {
+    return this._fetchByIndex('reviews', 'restaurant', restaurant_id);
+  }
+
+  /**
+   * Fetch all possible values of an index. This only exists for restaurants.
    * Returns a promise of an array of values.
-   * @param {String} index Name of the index to be used
+   * @param {String} index name of the index to be used
    */
   _getIndexRange(index) {
     return this._updateFromService()
       .then(() => this.db)
       .then(db => {
-        const store = this._getStore(db, false);
+        const store = this._getStore(db, 'restaurants', false);
         const idx = store.index(index);
         const request = idx.openKeyCursor(undefined, 'nextunique');
         return this._cursorToArray(request);
@@ -261,7 +309,7 @@ class DBHelper {
    * Fetch all cuisines with proper error handling.
    * Returns a promise of an array of cuisines.
    */
-  fetchCuisines(callback) {
+  fetchCuisines() {
     return this._getIndexRange('cuisine');
   }
 
