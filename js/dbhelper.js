@@ -32,6 +32,8 @@ class DBHelper {
         }
       }
     });
+    // try to sync reviews periodically
+    this.syncReviews();
   }
 
   /**
@@ -39,8 +41,15 @@ class DBHelper {
    */
   get CACHE_LIFETIME() {
     // ten minutes
-    // return 1000 * 60 * 10;
-    return 10;
+    return 1000 * 60 * 10;
+  }
+
+  /**
+   * Sync timeout - how often to sync local reviews with server
+   */
+  get SYNC_TIMEOUT() {
+    // once a minute
+    return 1000 * 60;
   }
 
   /**
@@ -184,6 +193,83 @@ class DBHelper {
         }
         request.onerror = reject;
       }));
+  }
+
+  /**
+   * Sync reviews from local to the server.
+   * @param {Object} review the single review to be stored onto the server
+   * @returns a promise which resolves once the review is synced (or when an error occured)
+   */
+  _syncReview(review) {
+    // store temporary review ID
+    const review_id = review.id;
+    if (review_id < 0) {
+      // yes, this is a temporary review
+      delete review.id;
+      return fetch(this._getDbURL('reviews'),
+        { method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(review) })
+        .then(res => {
+          if (res.ok) {
+            // All OK, the review was posted to the server
+            // Then we delete it from indexedDB
+            return res.json()
+              .then(json => this._saveReview(json))
+              .then(() => this.db)
+              .then(db => {
+                return new Promise((resolve, reject) => {
+                  const store = this._getStore(db, 'reviews', true);
+                  store.delete(review_id);
+                  store.transaction.oncomplete = resolve;
+                  store.transaction.onerror = reject;
+                  this.lastupdate[review.restaurant_id] = 0;
+                });
+              });
+          }
+          // Otherwise we will try next time
+          return Promise.resolve();
+        })
+        .catch(error => {
+          // some error happened...
+          console.log(error);
+          // Return a resolving Promise
+          return Promise.resolve();
+        });
+    }
+    // else return resolving promise
+    return Promise.resolve();
+  }
+
+  /**
+   * Sync all locally stored temporary reviews to the server
+   */
+  _syncReviews() {
+    return this.db
+      .then(db => {
+        const store = this._getStore(db, 'reviews', false);
+        // find all negative ids
+        const keyrange = IDBKeyRange.upperBound(-1);
+        const request = store.openCursor(keyrange);
+        return this._cursorToArray(request);
+      })
+      .then(reviews => {
+        let promises = [];
+        for (let i=0; i<reviews.length; i++) {
+          promises.push(this._syncReview(reviews[i]));
+        }
+        return Promise.all(promises);
+      });
+  }
+
+  /**
+   * Sync the reviews periodically
+   */
+  syncReviews() {
+    let self = this;
+    if (navigator.onLine) {
+      self._syncReviews();
+    }
+    window.setTimeout(self.syncReviews, self.SYNC_TIMEOUT);
   }
 
   /**
@@ -422,30 +508,58 @@ class DBHelper {
   }
 
   /**
+   * 
+   * @param {Object} review the review object to be saved
+   */
+  _saveReview(review) {
+    // create temporary ID if not set
+    if (!review.id) {
+      review.id = -Date.now();
+    }
+    // and store
+    return this.db
+      .then(db => {
+        return new Promise((resolve, reject) => {
+          const store = this._getStore(db, 'reviews', true);
+          const request = store.add(review, review.id);
+          request.onerror = reject;
+          request.onsuccess = resolve;
+        });
+      });
+  }
+
+  /**
    * Add a review to a restaurant
    * 
    * @param {Number} restaurant_id restaurant ID value
    * @param {String} name name of the reviewer
    * @param {Number} rating rating from 1 to 5
    * @param {String} comments review comments
+   * @returns a promise resolving to the stored review
    */
   addReview(restaurant_id, name, rating, comments) {
-    const review = { restaurant_id, name, rating, comments};
-    console.log(review);
-    fetch(this._getDbURL('reviews'),
+    const review = { restaurant_id, name, rating, comments, createdAt: Date.now() };
+    return fetch(this._getDbURL('reviews'),
           { method: "POST", headers: { "Content-Type": "application/json" },
             body: JSON.stringify(review) })
       .then(res => {
         if (res.ok) {
           // All OK, the review was posted to the server
-          console.log(res);
-          return res.json();
+          // We store it on the IndexDB
+          return res.json()
+            .then(json => this._saveReview(json))
+            .then(() => review);
         }
+        // Otherwise we stash the review (that's the same)
+        return this._saveReview(review)
+          .then(() => review);
       })
-      .then(json => {
-        console.log(json);
+      .catch(error => {
+        // some error happened...
+        // stash the review with temporary ID
+        return this._saveReview(review)
+          .then(() => review);
       });
-    // TODO
   }
 
   /**

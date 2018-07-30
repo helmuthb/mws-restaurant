@@ -154,10 +154,19 @@ let fillReviewsHTML = (reviews) => {
   container.appendChild(formTitle);
   const form = document.getElementById('review-form');
   form.onsubmit = (e) => {
-    const reviewer = document.getElementById('reviewer-name').value;
-    const rating = document.getElementById('reviewer-rating').value;
-    const comment = document.getElementById('reviewer-comment').value;
-    dbHelper.addReview(self.restaurant.id, reviewer, rating, comment);
+    e.preventDefault();
+    const reviewer = document.getElementById('reviewer-name');
+    const rating = document.getElementById('reviewer-rating');
+    const comment = document.getElementById('reviewer-comment');
+    dbHelper.addReview(self.restaurant.id, reviewer.value, rating.value, comment.value)
+      .then(review => {
+        // show the new review
+        ul.appendChild(createReviewHTML(review));
+        // clear form
+        reviewer.value = '';
+        rating.value = 1;
+        comment.value = '';
+      });
     return false;
   };
   container.appendChild(form);
@@ -170,7 +179,16 @@ let fillReviewsHTML = (reviews) => {
  * @param {Number} timestamp number of milliseconds since 1. 1. 1970, or a string value
  */
 let formattedDate = (timestamp) => {
-  const date = new Date(timestamp);
+  let date;
+  if (typeof timestamp == 'undefined') {
+    date = new Date();
+  }
+  if (typeof timestamp == 'string') {
+    date = new Date(timestamp);
+  }
+  if (typeof timestamp == 'number') {
+    date = new Date(timestamp);
+  }
   const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
   return date.getDate() + ' ' + months[date.getMonth()] + ' ' + date.getFullYear();
 }
