@@ -10,6 +10,7 @@
     "gulp": "^3.9.1",
     "gulp-imagemin": "^4.1.0",
     "gulp-uglify-es": "^1.0.4",
+    "imagemin-mozjpeg": "^7.0.0",
     "lighthouse": "^3.0.3"
   },
   "scripts": {

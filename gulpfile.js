@@ -1,10 +1,11 @@
 const gulp = require('gulp');
 const imagemin = require('gulp-imagemin');
+const mozjpeg = require('imagemin-mozjpeg');
 const uglify = require('gulp-uglify-es').default;
  
 gulp.task('img', () =>
-    gulp.src('src/img/*')
-        .pipe(imagemin())
+    gulp.src('src/img/*.jpg')
+        .pipe(imagemin({ use: mozjpeg({ quality: 75 }) }))
         .pipe(gulp.dest('dist/img'))
 );
 gulp.task('css', () =>
