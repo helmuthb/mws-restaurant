@@ -5,7 +5,7 @@ const uglify = require('gulp-uglify-es').default;
  
 gulp.task('img', () =>
     gulp.src('src/img/*.jpg')
-        .pipe(imagemin({ use: mozjpeg({ quality: 75 }) }))
+        .pipe(imagemin([ mozjpeg({ quality: 30 }) ]))
         .pipe(gulp.dest('dist/img'))
 );
 gulp.task('css', () =>
