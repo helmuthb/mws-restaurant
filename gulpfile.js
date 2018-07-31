@@ -1,5 +1,6 @@
 const gulp = require('gulp');
 const imagemin = require('gulp-imagemin');
+const uglify = require('gulp-uglify-es').default;
  
 gulp.task('img', () =>
     gulp.src('src/img/*')
@@ -12,6 +13,7 @@ gulp.task('css', () =>
 );
 gulp.task('js', () =>
     gulp.src('src/js/*')
+        .pipe(uglify())
         .pipe(gulp.dest('dist/js'))
 );
 gulp.task('files', () =>
