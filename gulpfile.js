@@ -2,7 +2,8 @@ const gulp = require('gulp');
 const imagemin = require('gulp-imagemin');
 const mozjpeg = require('imagemin-mozjpeg');
 const uglify = require('gulp-uglify-es').default;
- 
+const cssnano = require('gulp-cssnano');
+
 gulp.task('img', () =>
     gulp.src('src/img/*.jpg')
         .pipe(imagemin([ mozjpeg({ quality: 30 }) ]))
@@ -10,6 +11,7 @@ gulp.task('img', () =>
 );
 gulp.task('css', () =>
     gulp.src('src/css/*')
+        .pipe(cssnano())
         .pipe(gulp.dest('dist/css'))
 );
 gulp.task('js', () =>
