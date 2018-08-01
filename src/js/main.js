@@ -144,10 +144,14 @@ let resetRestaurants = (restaurants) => {
  * Create all restaurants HTML and add them to the webpage.
  */
 let fillRestaurantsHTML = (restaurants = self.restaurants) => {
-  const ul = document.getElementById('restaurants-list');
+  const old = document.getElementById('restaurants-list');
+  const ul = document.createElement('ul');
+  ul.setAttribute('id', 'restaurants-list');
   restaurants.forEach(restaurant => {
     ul.append(createRestaurantHTML(restaurant));
   });
+  const parent = old.parentElement;
+  parent.replaceChild(ul, old);
   addMarkersToMap();
 }
 
@@ -158,14 +162,14 @@ let createRestaurantHTML = (restaurant) => {
   const li = document.createElement('li');
 
   const image = document.createElement('img');
-  image.className = 'restaurant-img';
+  image.className = 'restaurant-img lazyload';
   image.alt = restaurant.name;
   var fullSrc = dbHelper.imageUrlForRestaurant(restaurant);
   var srcset = dbHelper.imageUrlForRestaurant(restaurant, 200) + " 200w, " +
                dbHelper.imageUrlForRestaurant(restaurant, 400) + " 400w, " +
                fullSrc + " 800w";
-  image.setAttribute("srcset", srcset);
-  image.src = fullSrc;
+  image.setAttribute("data-srcset", srcset);
+  image.setAttribute("data-src", fullSrc);
   li.append(image);
 
   const name = document.createElement('h2');

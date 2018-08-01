@@ -4,7 +4,8 @@
   "description": "Mobile Web Udacity project",
   "private": true,
   "dependencies": {
-    "browser-sync": "^2.24.6"
+    "browser-sync": "^2.24.6",
+    "lazysizes": "^4.0.4"
   },
   "devDependencies": {
     "critical": "^1.3.4",

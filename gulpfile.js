@@ -21,6 +21,10 @@ gulp.task('js', () =>
         .pipe(uglify())
         .pipe(gulp.dest('dist/js'))
 );
+gulp.task('lazyload', () =>
+    gulp.src('node_modules/lazysizes/lazysizes.min.js')
+         .pipe(gulp.dest('dist/js'))
+);
 gulp.task('files', () =>
     gulp.src(['src/*.xml', 'src/*.png', 'src/*.json',
               'src/*.js', 'src/*.svg', 'src/*.ico'])
@@ -31,7 +35,7 @@ gulp.task('html', () =>
         .pipe(rename({ suffix: '-original' }))
         .pipe(gulp.dest('dist'))
 );
-gulp.task('build', ['img', 'css', 'js', 'files', 'html']);
+gulp.task('build', ['img', 'css', 'js', 'files', 'html', 'lazyload']);
 gulp.task('critical', ['build'], () => {
   critical.generate({
     inline: true,
