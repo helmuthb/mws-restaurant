@@ -28,7 +28,11 @@
 
   <main>
     <aside id="map-container">
-      <div id="map" role="application" aria-label="Google Maps"></div>
+      <div id="static-map" onclick="swapMap()"
+        style="background-image: url(https://maps.googleapis.com/maps/api/staticmap?center=40.722216,-73.987501&zoom=14&size=500x300&format=jpg&maptype=roadmap&key=AIzaSyClZqWH_MXlITjqt40fkyKk4g2Bj2Zc1Nk); background-size: cover;"
+             aria-label="Static Google Maps">Click the Map for interactive version
+      </div>
+      <div id="map" style="display: none;" role="application" aria-label="Google Maps"></div>
     </aside>
     <section>
       <div class="filter-options">

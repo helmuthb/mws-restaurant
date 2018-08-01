@@ -78,6 +78,15 @@ let fillCuisinesHTML = (cuisines = self.cuisines) => {
   });
 }
 
+// from https://medium.com/@lorenzozaccagnini/improve-google-map-performance-in-your-pwa-fe24a6b3a37b
+window.swapMap = () => {    
+  if (document.getElementById('map').style.display === 'none')      
+  {        
+    document.getElementById('map').style.display = 'block';
+    document.getElementById('static-map').style.display = 'none';
+  }    
+};
+
 /**
  * Initialize Google map, called from HTML.
  */

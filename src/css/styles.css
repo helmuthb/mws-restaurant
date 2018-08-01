@@ -99,10 +99,15 @@ nav h1 a {
     text-decoration: underline;
 }
 /* ====================== Map ====================== */
-#map {
+#map, #static-map {
   height: 400px;
   width: 100%;
   background-color: #ccc;
+}
+#static-map {
+  text-align: center;
+  vertical-align: center;
+  font-size: 300%;
 }
 /* ====================== Restaurant Filtering ====================== */
 .filter-options {
@@ -299,7 +304,7 @@ nav h1 a {
     height: 100%;
     order: 2;
   }
-  .inside #map {
+  .inside #map, .inside #static-map {
     height: 100%;
     width: 100%;
   }
